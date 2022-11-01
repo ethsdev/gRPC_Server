@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package main;
+
+option go_package = ".";
+
+service TestApi {
+  rpc FindLog(LambdaRequest) returns (LambdaResponse) {}
+}
+
+message LambdaRequest {
+  string time = 1;
+  string deltatime = 2;
+}
+
+
+message LambdaResponse {
+  string result = 1;
+}
