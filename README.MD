@@ -40,8 +40,11 @@ When logs are present: <br/>
 ## All repos:
 
 https://github.com/exortme1ster/AkkaLogsHandler
+
 https://github.com/exortme1ster/GRPCClientServer
+
 https://github.com/exortme1ster/LogFileGenerator
+
 https://github.com/exortme1ster/pythonLambda
 
 ## Video:
