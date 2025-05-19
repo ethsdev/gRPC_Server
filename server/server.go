@@ -4,83 +4,92 @@ import (
 	pb "GRPCClientServer/gen/proto"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"google.golang.org/grpc"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
-	"os"
+	"time"
 )
 
-type testApiServer struct {
-	pb.UnsafeTestApiServer
-}
-
-// A Response struct to map the Entire Response
+// Response represents the JSON structure from the external API
 type Response struct {
 	Content []string `json:"content"`
 	Found   string   `json:"isFound"`
 }
 
+type testApiServer struct {
+	pb.UnimplementedTestApiServer // use the proper embedded struct
+	client *http.Client
+}
+
+// NewTestApiServer is a constructor for testApiServer
+func NewTestApiServer() *testApiServer {
+	return &testApiServer{
+		client: &http.Client{Timeout: 10 * time.Second},
+	}
+}
+
+// fetchLogFromAPI calls the external API and unmarshals the response
+func (s *testApiServer) fetchLogFromAPI(timeStr, deltaTime string) (Response, error) {
+	url := fmt.Sprintf("https://imh5ufzsd9.execute-api.us-east-1.amazonaws.com/prod/checkifpresent?T=%s&dT=%s", timeStr, deltaTime)
+
+	resp, err := s.client.Get(url)
+	if err != nil {
+		return Response{}, fmt.Errorf("error making GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return Response{}, errors.New("non-200 response from API")
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return Response{}, fmt.Errorf("error reading response: %w", err)
+	}
+
+	var result Response
+	if err := json.Unmarshal(data, &result); err != nil {
+		return Response{}, fmt.Errorf("error unmarshaling JSON: %w", err)
+	}
+
+	return result, nil
+}
+
 func (s *testApiServer) FindLog(ctx context.Context, req *pb.LambdaRequest) (*pb.LambdaResponse, error) {
-
-	url := fmt.Sprintf("https://imh5ufzsd9.execute-api.us-east-1.amazonaws.com/prod/checkifpresent?T=%s&dT=%s", req.Time, req.Deltatime)
-
-	response, err := http.Get(url)
+	apiResp, err := s.fetchLogFromAPI(req.Time, req.Deltatime)
 	if err != nil {
-		fmt.Print(err.Error())
-		os.Exit(1)
+		log.Printf("API fetch error: %v", err)
+		return nil, err
 	}
 
-	fmt.Println(response.Body)
+	if apiResp.Found == "false" {
+		apiResp.Content = []string{}
+	}
 
-	responseData, err := ioutil.ReadAll(response.Body)
+	resJSON, err := json.Marshal(apiResp)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("JSON marshal error: %v", err)
+		return nil, err
 	}
 
-	fmt.Println(responseData)
-
-	var responseObject Response
-
-	json.Unmarshal(responseData, &responseObject)
-
-	fmt.Println(responseObject.Content)
-
-	if responseObject.Found == "false" {
-		var emptyArray []string
-
-		responseBody := Response{
-			Content: emptyArray,
-			Found:   "False",
-		}
-
-		responseToClient, _ := json.Marshal(responseBody)
-
-		return &pb.LambdaResponse{Result: string(responseToClient)}, nil
-	} else {
-		responseBody := Response{
-			Content: responseObject.Content,
-			Found:   responseObject.Found,
-		}
-
-		responseToClient, _ := json.Marshal(responseBody)
-
-		return &pb.LambdaResponse{Result: string(responseToClient)}, nil
-	}
+	return &pb.LambdaResponse{Result: string(resJSON)}, nil
 }
 
 func main() {
 	lis, err := net.Listen("tcp", "localhost:9000")
 	if err != nil {
-		log.Fatalf("Failed to listen on port 9000: %v", err)
+		log.Fatalf("Failed to listen: %v", err)
 	}
 
 	grpcServer := grpc.NewServer()
-	pb.RegisterTestApiServer(grpcServer, &testApiServer{})
+	pb.RegisterTestApiServer(grpcServer, NewTestApiServer())
 
+	log.Println("gRPC server listening on localhost:9000")
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("Failed to listen on port 9000: %v", err)
+		log.Fatalf("Failed to serve gRPC: %v", err)
 	}
 }
