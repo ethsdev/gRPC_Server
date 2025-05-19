@@ -1,51 +1,38 @@
 # LocatingRecordsInLogs-gRPC
-A distributed program for locating requested records in the log files using gRPC.
+
+A distributed gRPC-based application for locating requested records in log files via a Lambda-backed HTTP API.
+
 ---
-Name: Nikita Mashchenko
+**Platform:** Windows 10  
+**Go Version:** 1.19.2  
+**IDE:** IntelliJ IDEA Ultimate
+
 ---
 
-### Development Environment
-+ Windows 10
-+ GO version 1.19.2
-+ IntelliJ IDEA Ultimate
+## 🚀 Project Overview
 
-## Entire Setup of the Project:
+This project consists of a gRPC client-server architecture where:
 
+- The **gRPC client** sends a request with a specific `time` and `deltaTime`.
+- The **gRPC server** receives the request and queries an AWS API Gateway endpoint.
+- The endpoint routes the request to a Lambda function that checks for log records within the specified time range.
 
-### Steps to Run the gRPC Application
-- Clone the github repo on your local machine.
-- Open the command line at the root of the project.
-- Enter protoc --proto_path=proto proto/*.proto --go_out=gen/proto/ (if not already created) or use makefile
-- Enter protoc --proto_path=proto proto/*.proto --go-grpc_out=gen/proto/ (if not already created) or use makefile
-- cd into server and do : go run server.go
-- in case server did'nt start, perform required installations like go get google.golang.org/grpc
-- open another terminal, cd into client and do : go run client.go
-- enter the required time and delta time to run the application
+### ✅ Response Behavior
 
+- If logs **are present**, a 200 response is returned with an MD5 hash of the logs.
+- If logs **are not found**, a 400-level response is returned with a "not found" message.
 
-## Overview
-The GRPC client make a request to the server, and server make request to API gateaway that is redirected to GET request where lambda function calculates 
-if desired input is in file and returns following: 
-If the logs are present, the response returned is the md5 hash of logs with a statusCode of 200. <br/>
-If no logs were present in the timerange, the response is a 400-level message with a message that logs were not present in the time range.
+---
 
-## Output
-When logs are not present: <br/>
-![img_1.png](img_1.png)
-<br/>
-When logs are present: <br/>
-![img.png](img.png)
-<br/>
+## 🔧 Refactored Architecture
 
-## All repos:
+> ⚠️ **Major structural changes implemented:**
 
-https://github.com/exortme1ster/AkkaLogsHandler
+- Extracted API call logic into a reusable function.
+- Added structured error handling (replaced `os.Exit` and raw `fmt.Print`).
+- Used `http.Client` with timeouts.
+- Switched from deprecated `ioutil` to `io` for reading responses.
+- Embedded `UnimplementedTestApiServer` for forward compatibility.
+- Added constructor method `NewTestApiServer()` for better code organization and testability.
 
-https://github.com/exortme1ster/GRPCClientServer
-
-https://github.com/exortme1ster/LogFileGenerator
-
-https://github.com/exortme1ster/pythonLambda
-
-## Video:
-https://www.youtube.com/watch?v=fmeBeOcpBy0
+---
